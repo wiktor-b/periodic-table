@@ -8,13 +8,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { RxState } from '@rx-angular/state';
-import { RxEffects } from '@rx-angular/state/effects';
 import {
   debounceTime,
   distinctUntilChanged,
   map,
   startWith,
+  switchMap,
 } from 'rxjs/operators';
+import { Observable } from 'rxjs';
 import { EditDialogComponent } from '../edit-dialog/edit-dialog.component';
 
 interface PeriodicElement {
@@ -46,7 +47,7 @@ const ELEMENT_DATA: PeriodicElement[] = [
   selector: 'app-periodic-table',
   templateUrl: './periodic-table.component.html',
   styleUrls: ['./periodic-table.component.css'],
-  providers: [RxState, RxEffects],
+  providers: [RxState],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [
@@ -72,7 +73,6 @@ export class PeriodicTableComponent implements OnInit {
 
   constructor(
     public readonly state: RxState<ComponentState>,
-    private readonly effects: RxEffects,
     private dialog: MatDialog
   ) {}
 
@@ -98,11 +98,24 @@ export class PeriodicTableComponent implements OnInit {
       data: { ...element },
     });
 
-    this.effects.register(dialogRef.afterClosed(), (result) => {
-      if (result) {
-        this.updateElement(result);
-      }
-    });
+    dialogRef
+      .afterClosed()
+      .pipe(
+        switchMap((result: PeriodicElement | undefined): Observable<void> => {
+          if (result) {
+            return new Observable<void>((observer) => {
+              this.updateElement(result);
+              observer.next();
+              observer.complete();
+            });
+          }
+          return new Observable<void>((observer) => {
+            observer.next();
+            observer.complete();
+          });
+        })
+      )
+      .subscribe();
   }
 
   private updateElement(updatedElement: PeriodicElement) {
